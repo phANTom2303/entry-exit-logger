@@ -85,8 +85,7 @@ function processScan(scannedData) {
         const sheetRow = studentRowIndex + 1;
 
         // Column E (Current_status) is col 5, Column F (Last_scan_time) is col 6
-        studentSheet.getRange(sheetRow, 5).setValue(action);
-        studentSheet.getRange(sheetRow, 6).setValue(timestamp);
+        studentSheet.getRange(sheetRow, 5, 1, 2).setValues([[action, timestamp]]);
 
         // Append the array of data as a new row in the logs sheet
         logsSheet.appendRow([timestamp, studentId, name, action]);
