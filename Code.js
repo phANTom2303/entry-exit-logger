@@ -164,14 +164,51 @@ function processScan(scannedData) {
 /**
  * Endpoint called by Admin.html
  */
-function getLogs() {
-    // TODO: Implement SpreadsheetApp logic to fetch real logs.
+function getLogs(pageNum) {
+    pageNum = parseInt(pageNum) || 1;
+    const pageSize = 100;
+    
+    try {
+        const DB = SpreadsheetApp.openById(DB_ID).getSheets();
+        const logsSheet = DB[1]; // Index 1 is Logs Sheet
+        
+        const totalSheetRows = logsSheet.getLastRow();
+        const dataRows = Math.max(0, totalSheetRows - 1); // Assuming row 1 is headers
+        const totalPages = Math.ceil(dataRows / pageSize) || 1;
+        
+        let data = [];
+        let showingStart = 0;
+        let showingEnd = 0;
 
-    // For now, return a dummy 2D array representing rows from the Google Sheet
-    return [
-        [new Date().getTime(), "mock-uuid-1", "Alice", "IN"],
-        [new Date().getTime() - 60000, "mock-uuid-2", "Bob", "OUT"]
-    ];
+        if (dataRows > 0 && pageNum <= totalPages) {
+            // Page 1 is the most recent (bottom of the sheet)
+            showingStart = ((pageNum - 1) * pageSize) + 1;
+            showingEnd = Math.min(pageNum * pageSize, dataRows);
+            
+            const numRowsToFetch = showingEnd - showingStart + 1;
+            
+            // Calculate actual sheet rows starting from the bottom
+            const startRowIdx = totalSheetRows - showingEnd + 1;
+            
+            if (numRowsToFetch > 0) {
+                // getRange(row, column, numRows, numColumns)
+                data = logsSheet.getRange(startRowIdx, 1, numRowsToFetch, logsSheet.getLastColumn()).getDisplayValues();
+                // Reverse so the newest items are first in the array
+                data.reverse();
+            }
+        }
+
+        return {
+            totalRows: dataRows,
+            rowsShowing: `${showingStart} to ${showingEnd} (from end)`,
+            pageNumber: pageNum,
+            totalPages: totalPages,
+            data: data
+        };
+    } catch (error) {
+        console.error("Error fetching logs:", error);
+        throw error;
+    }
 }
 
 // ==========================================

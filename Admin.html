@@ -1,1 +1,170 @@
-<h1>Admin Dashboard</h1>
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <title>Admin Dashboard</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 20px;
+        color: #333;
+      }
+      #controls {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: #f4f4f9;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+      }
+      button {
+        padding: 8px 16px;
+        cursor: pointer;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      button:hover:not(:disabled) {
+        background-color: #0056b3;
+      }
+      .info-text {
+        font-size: 14px;
+        font-weight: bold;
+      }
+      .stats-text {
+        font-size: 13px;
+        color: #666;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 10px;
+        border: 1px solid #ddd;
+        text-align: left;
+      }
+      th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+      }
+      tr:nth-child(even) {
+        background-color: #fdfdfd;
+      }
+      .message-cell {
+        font-style: italic;
+        color: #666;
+        text-align: center;
+      }
+      .error-cell {
+        color: #d9534f;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Admin Dashboard</h1>
+    
+    <!-- User controls at the top -->
+    <div id="controls">
+      <button id="btn-prev" onclick="changePage(-1)" disabled>Previous</button>
+      <span class="info-text" id="page-info">Loading...</span>
+      <button id="btn-next" onclick="changePage(1)" disabled>Next</button>
+      <span class="stats-text" id="stats-info"></span>
+    </div>
+
+    <!-- Table data below controls -->
+    <table id="logs-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Student ID</th>
+          <th>Name</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="4" class="message-cell">Loading data...</td></tr>
+      </tbody>
+    </table>
+    
+    <script>
+      let currentPage = 1;
+      let totalPages = 1;
+
+      // Handle Previous / Next clicks
+      function changePage(delta) {
+        let newPage = currentPage + delta;
+        if (newPage >= 1 && newPage <= totalPages) {
+          fetchLogs(newPage);
+        }
+      }
+
+      function fetchLogs(pageNum) {
+        const tbody = document.querySelector("#logs-table tbody");
+        tbody.innerHTML = '<tr><td colspan="4" class="message-cell">Loading data...</td></tr>';
+        
+        // Disable buttons while fetching
+        document.getElementById("btn-prev").disabled = true;
+        document.getElementById("btn-next").disabled = true;
+
+        console.log(`Fetching logs for page ${pageNum}...`);
+        
+        google.script.run
+          .withSuccessHandler(function(response) {
+            console.log("Logs fetched successfully:", response);
+            currentPage = response.pageNumber;
+            totalPages = response.totalPages;
+
+            // Update control texts
+            document.getElementById("page-info").textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById("stats-info").textContent = `| Total Rows: ${response.totalRows} | Showing: ${response.rowsShowing}`;
+            
+            // Re-enable/disable buttons accordingly
+            document.getElementById("btn-prev").disabled = (currentPage <= 1);
+            document.getElementById("btn-next").disabled = (currentPage >= totalPages);
+
+            // Render table rows
+            tbody.innerHTML = '';
+            
+            if (!response.data || response.data.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="4" class="message-cell">No logs found.</td></tr>';
+              return;
+            }
+
+            response.data.forEach(row => {
+              const tr = document.createElement("tr");
+              row.forEach((cellData) => {
+                const td = document.createElement("td");
+                td.textContent = cellData !== undefined ? cellData : "";
+                tr.appendChild(td);
+              });
+              tbody.appendChild(tr);
+            });
+          })
+          .withFailureHandler(function(error) {
+            console.error("Error fetching logs:", error);
+            tbody.innerHTML = `<tr><td colspan="4" class="error-cell">Error loading data: ${error.message || 'Unknown error'}</td></tr>`;
+            
+            // On error, let them try moving pages if possible, or retry
+            document.getElementById("btn-prev").disabled = (currentPage <= 1);
+            document.getElementById("btn-next").disabled = (currentPage >= totalPages);
+          })
+          .getLogs(pageNum);
+      }
+
+      // Initial load: Fetch the first page (most recent entries)
+      document.addEventListener("DOMContentLoaded", function() {
+        fetchLogs(currentPage);
+      });
+    </script>
+  </body>
+</html>
