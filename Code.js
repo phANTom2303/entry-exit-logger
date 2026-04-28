@@ -84,7 +84,9 @@ function processScan(scannedData) {
         // Arrays are 0-indexed but getRange is 1-indexed. So row = studentRowIndex + 1
         const sheetRow = studentRowIndex + 1;
 
-        // Column E (Current_status) is col 5, Column F (Last_scan_time) is col 6
+        // Column E (Current_status) is col 5, Column F (Last_scan_time) is col 6. 
+        //the below function call means from the cell {sheetRow, 5} update 1 row and 2 columns with the array provided 
+        //i.e. update the range {sheetRow, 5} to {sheetRow, 6}
         studentSheet.getRange(sheetRow, 5, 1, 2).setValues([[action, timestamp]]);
 
         // Append the array of data as a new row in the logs sheet
