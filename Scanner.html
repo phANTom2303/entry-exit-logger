@@ -85,11 +85,27 @@
         inputField.disabled = true;
         showFeedback("Processing...", "status-processing");
 
+        // 1. Create a timeout safeguard (e.g., 15 seconds)
+        const timeoutMs = 15000; 
+        let requestFinished = false;
+
+        const timeoutId = setTimeout(() => {
+            if (!requestFinished) {
+                requestFinished = true;
+                showFeedback("Request timed out. Please try again.", "status-error");
+                resetUI();
+            }
+        }, timeoutMs);
+
         // ==========================================
         // THE RPC CALL TO GOOGLE APPS SCRIPT
         // ==========================================
         google.script.run
           .withSuccessHandler(function(response) {
+            if (requestFinished) return; // Ignore if timeout already triggered
+            requestFinished = true;
+            clearTimeout(timeoutId);
+            
             // This runs if Code.gs returns data without throwing an error
             if (response.success) {
                const cssClass = response.status === "IN" ? "status-in" : "status-out";
@@ -101,6 +117,10 @@
             resetUI();
           })
           .withFailureHandler(function(error) {
+            if (requestFinished) return; 
+            requestFinished = true;
+            clearTimeout(timeoutId);
+            
             // This runs if Code.gs throws an Error or completely crashes
             showFeedback("Server Error: " + error.message, "status-error");
             resetUI();
