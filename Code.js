@@ -1,8 +1,9 @@
 // ==========================================
 // CONFIGURATION & GLOBALS
 // ==========================================
-// Fetch the Spreadsheet ID from Apps Script's environment variables (Script Properties)
+// Fetch the Spreadsheet ID and Folder ID from Apps Script's environment variables (Script Properties)
 const DB_ID = PropertiesService.getScriptProperties().getProperty('DB_ID');
+const QR_FOLDER_ID = PropertiesService.getScriptProperties().getProperty('QR_FOLDER_ID');
 
 // ==========================================
 // ROUTING (The GET Endpoint)
@@ -70,7 +71,7 @@ function processScan(scannedData) {
         } else {
             // Cache miss: Fetch all data from the students sheet
             const studentData = studentSheet.getDataRange().getValues();
-            
+
             // Find the student by ID (skip row 0 because it's the header)
             for (let i = 1; i < studentData.length; i++) {
                 // Force string comparison for robust matching
@@ -120,7 +121,7 @@ function processScan(scannedData) {
             if (queueData) {
                 scanQueue = JSON.parse(queueData);
             }
-            
+
             scanQueue.push({
                 studentId: studentId,
                 name: name,
@@ -128,7 +129,7 @@ function processScan(scannedData) {
                 timestamp: current_timestamp.getTime(),
                 sheetRow: sheetRow
             });
-            
+
             cache.put('scanQueue', JSON.stringify(scanQueue), 21600); // 6 hours
         } catch (error) {
             console.error("Lock error, failed to write to queue:", error);
@@ -142,8 +143,8 @@ function processScan(scannedData) {
 
         // "Read-through Cache": Update the cache so the next request gets the new status and timestamp instantly
         cache.put(
-            cacheKey, 
-            JSON.stringify([name, action, current_timestamp.getTime(), studentRowIndex]), 
+            cacheKey,
+            JSON.stringify([name, action, current_timestamp.getTime(), studentRowIndex]),
             21600 // cache timeout in seconds (6 hours max for Apps Script cache)
         );
 
@@ -167,15 +168,15 @@ function processScan(scannedData) {
 function getLogs(pageNum) {
     pageNum = parseInt(pageNum) || 1;
     const pageSize = 100;
-    
+
     try {
         const DB = SpreadsheetApp.openById(DB_ID).getSheets();
         const logsSheet = DB[1]; // Index 1 is Logs Sheet
-        
+
         const totalSheetRows = logsSheet.getLastRow();
         const dataRows = Math.max(0, totalSheetRows - 1); // Assuming row 1 is headers
         const totalPages = Math.ceil(dataRows / pageSize) || 1;
-        
+
         let data = [];
         let showingStart = 0;
         let showingEnd = 0;
@@ -184,12 +185,12 @@ function getLogs(pageNum) {
             // Page 1 is the most recent (bottom of the sheet)
             showingStart = ((pageNum - 1) * pageSize) + 1;
             showingEnd = Math.min(pageNum * pageSize, dataRows);
-            
+
             const numRowsToFetch = showingEnd - showingStart + 1;
-            
+
             // Calculate actual sheet rows starting from the bottom
             const startRowIdx = totalSheetRows - showingEnd + 1;
-            
+
             if (numRowsToFetch > 0) {
                 // getRange(row, column, numRows, numColumns)
                 data = logsSheet.getRange(startRowIdx, 1, numRowsToFetch, logsSheet.getLastColumn()).getDisplayValues();
@@ -212,8 +213,83 @@ function getLogs(pageNum) {
 }
 
 // ==========================================
-// BACKGROUND TASKS & TRIGGERS
+// BACKGROUND TASKS & TRIGGERS & SETUP
 // ==========================================
+
+/**
+ * Run this function ONCE from the Apps Script editor to prompt Google 
+ * to ask you for the new UrlFetchApp and DriveApp permissions.
+ */
+function authorizeSetup() {
+    DriveApp.getRootFolder();
+    UrlFetchApp.fetch("https://www.google.com");
+    console.log("Authorization successful!");
+
+    const qrUrl = `http://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent("guddubhaiya")}&size=100x100`;
+    const imageBlob = UrlFetchApp.fetch(qrUrl).getBlob().setName(`Guddubhaiya_QR.png`);
+    // Use the configured Google Drive Folder ID
+    const folder = DriveApp.getFolderById(QR_FOLDER_ID);
+    const file = folder.createFile(imageBlob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    const driveLink = file.getUrl();
+    console.log(driveLink);
+}
+
+/**
+ * Endpoint called by Admin.html to get all students
+ */
+function getAllStudents() {
+    try {
+        const DB = SpreadsheetApp.openById(DB_ID).getSheets();
+        const studentSheet = DB[0];
+        const data = studentSheet.getDataRange().getDisplayValues();
+
+        // Skip header row
+        const students = data.slice(1);
+        return { success: true, data: students };
+    } catch (e) {
+        console.error("Error fetching students:", e);
+        return { success: false, message: e.message };
+    }
+}
+
+/**
+ * Endpoint called by Admin.html to create a new student
+ */
+function createStudent(studentId, name, email) {
+    try {
+        const DB = SpreadsheetApp.openById(DB_ID).getSheets();
+        const studentSheet = DB[0];
+
+        // 1. Check if student already exists
+        const data = studentSheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+            if (String(data[i][0]) === String(studentId)) {
+                return { success: false, message: "Student with this ID already exists." };
+            }
+        }
+
+        // 2. Generate QR Code
+        const qrUrl = `http://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(studentId)}&size=100x100`;
+        const imageBlob = UrlFetchApp.fetch(qrUrl).getBlob().setName(`${studentId}_QR.png`);
+
+        // 3. Save to Drive
+        // Use the configured Google Drive Folder ID
+        const folder = DriveApp.getFolderById(QR_FOLDER_ID);
+        const file = folder.createFile(imageBlob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        const driveLink = file.getUrl();
+
+        // 4. Append to sheet
+        // Columns: Student_ID, Name, Email, QR_Drive_Link, Current_status, Last_scan_time
+        studentSheet.appendRow([studentId, name, email, driveLink, 'OUT', '']);
+
+        return { success: true, message: "Student created successfully!", driveLink: driveLink };
+    } catch (e) {
+        console.error("Error creating student:", e);
+        return { success: false, message: e.message };
+    }
+}
 
 /**
  * Trigger function to drain the `scanQueue` from cache and batch insert/update to Google Sheets
@@ -222,7 +298,7 @@ function getLogs(pageNum) {
 function processScanQueue() {
     const cache = CacheService.getScriptCache();
     const lock = LockService.getScriptLock();
-    
+
     let queueStr;
     try {
         lock.waitLock(10000);
@@ -297,7 +373,7 @@ function setupTrigger() {
             ScriptApp.deleteTrigger(trigger);
         }
     });
-    
+
     // Create new 1-minute trigger
     ScriptApp.newTrigger('processScanQueue')
         .timeBased()
