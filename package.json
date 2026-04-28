@@ -1,0 +1,23 @@
+{
+  "name": "entry-exit-logger",
+  "version": "1.0.0",
+  "description": "",
+  "main": "Code.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phANTom2303/entry-exit-logger.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/phANTom2303/entry-exit-logger/issues"
+  },
+  "homepage": "https://github.com/phANTom2303/entry-exit-logger#readme",
+  "devDependencies": {
+    "@types/google-apps-script": "^2.0.8"
+  }
+}
