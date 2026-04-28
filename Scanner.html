@@ -1,1 +1,134 @@
-<h1>Scanner UI</h1>
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body {
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: #f4f4f9;
+        padding-top: 50px;
+      }
+      .card {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        text-align: center;
+        width: 100%;
+        max-width: 400px;
+      }
+      input {
+        width: 80%;
+        padding: 10px;
+        margin-bottom: 15px;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:disabled {
+        background-color: #cccccc;
+      }
+      #feedback {
+        margin-top: 20px;
+        padding: 15px;
+        font-size: 18px;
+        font-weight: bold;
+        border-radius: 8px;
+        display: none;
+      }
+      /* UI Status Colors */
+      .status-in { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+      .status-out { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+      .status-processing { background-color: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
+      .status-error { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    </style>
+  </head>
+  <body>
+
+    <div class="card">
+      <h2>RPC Test Scanner</h2>
+      <p>Enter a mock ID to test the backend</p>
+      
+      <input type="text" id="studentId" placeholder="e.g., mock-uuid-123" />
+      <br>
+      <button id="scanBtn" onclick="triggerScan()">Simulate Scan</button>
+      
+      <div id="feedback"></div>
+    </div>
+
+    <script>
+      function triggerScan() {
+        const inputField = document.getElementById('studentId');
+        const studentId = inputField.value.trim();
+        const btn = document.getElementById('scanBtn');
+
+        // Basic validation
+        if (!studentId) {
+          showFeedback("Please enter an ID", "status-error");
+          return;
+        }
+
+        // Lock UI to prevent spam clicks while waiting for the server
+        btn.disabled = true;
+        inputField.disabled = true;
+        showFeedback("Processing...", "status-processing");
+
+        // ==========================================
+        // THE RPC CALL TO GOOGLE APPS SCRIPT
+        // ==========================================
+        google.script.run
+          .withSuccessHandler(function(response) {
+            // This runs if Code.gs returns data without throwing an error
+            if (response.success) {
+               const cssClass = response.status === "IN" ? "status-in" : "status-out";
+               showFeedback(`${response.name} is ${response.status}`, cssClass);
+            } else {
+               showFeedback(response.message, "status-error");
+            }
+            
+            resetUI();
+          })
+          .withFailureHandler(function(error) {
+            // This runs if Code.gs throws an Error or completely crashes
+            showFeedback("Server Error: " + error.message, "status-error");
+            resetUI();
+          })
+          .processScan(studentId); // Calls the function in Code.gs
+      }
+
+      // --- Helper Functions ---
+      function showFeedback(text, className) {
+        const fb = document.getElementById('feedback');
+        fb.style.display = 'block';
+        fb.innerText = text;
+        fb.className = className;
+      }
+
+      function resetUI() {
+        const inputField = document.getElementById('studentId');
+        const btn = document.getElementById('scanBtn');
+        
+        // Re-enable inputs and clear the text box after 2 seconds
+        setTimeout(() => {
+          inputField.value = '';
+          inputField.disabled = false;
+          btn.disabled = false;
+          inputField.focus();
+          document.getElementById('feedback').style.display = 'none';
+        }, 2000);
+      }
+    </script>
+  </body>
+</html>
