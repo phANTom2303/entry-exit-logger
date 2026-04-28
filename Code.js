@@ -111,13 +111,34 @@ function processScan(scannedData) {
         // Arrays are 0-indexed but getRange is 1-indexed. So row = studentRowIndex + 1
         const sheetRow = studentRowIndex + 1;
 
-        // Column E (Current_status) is col 5, Column F (Last_scan_time) is col 6. 
-        //the below function call means from the cell {sheetRow, 5} update 1 row and 2 columns with the array provided 
-        //i.e. update the range {sheetRow, 5} to {sheetRow, 6}
-        studentSheet.getRange(sheetRow, 5, 1, 2).setValues([[action, current_timestamp]]);
-
-        // Append the array of data as a new row in the logs sheet
-        logsSheet.appendRow([current_timestamp, studentId, name, action]);
+        // Use LockService to prevent race conditions when appending to the cache queue
+        const lock = LockService.getScriptLock();
+        try {
+            lock.waitLock(10000); // Wait up to 10s for other concurrent scans
+            let scanQueue = [];
+            const queueData = cache.get('scanQueue');
+            if (queueData) {
+                scanQueue = JSON.parse(queueData);
+            }
+            
+            scanQueue.push({
+                studentId: studentId,
+                name: name,
+                action: action,
+                timestamp: current_timestamp.getTime(),
+                sheetRow: sheetRow
+            });
+            
+            cache.put('scanQueue', JSON.stringify(scanQueue), 21600); // 6 hours
+        } catch (error) {
+            console.error("Lock error, failed to write to queue:", error);
+            return {
+                success: false,
+                message: "System busy. Please try again."
+            };
+        } finally {
+            lock.releaseLock();
+        }
 
         // "Read-through Cache": Update the cache so the next request gets the new status and timestamp instantly
         cache.put(
@@ -151,4 +172,81 @@ function getLogs() {
         [new Date().getTime(), "mock-uuid-1", "Alice", "IN"],
         [new Date().getTime() - 60000, "mock-uuid-2", "Bob", "OUT"]
     ];
+}
+
+// ==========================================
+// BACKGROUND TASKS & TRIGGERS
+// ==========================================
+
+/**
+ * Trigger function to drain the `scanQueue` from cache and batch insert/update to Google Sheets
+ * Runs every 1 minute.
+ */
+function processScanQueue() {
+    const cache = CacheService.getScriptCache();
+    const lock = LockService.getScriptLock();
+    
+    let queueStr;
+    try {
+        lock.waitLock(10000);
+        queueStr = cache.get('scanQueue');
+        if (!queueStr) {
+            // Queue is empty, nothing to do
+            return;
+        }
+        // Clear queue so incoming scans can start fresh immediately
+        cache.remove('scanQueue');
+    } catch (e) {
+        console.error("Failed to acquire lock for processing queue:", e);
+        return;
+    } finally {
+        lock.releaseLock();
+    }
+
+    const queue = JSON.parse(queueStr);
+    if (queue.length === 0) return;
+
+    // We have items to process! Connect to Sheets
+    const DB = SpreadsheetApp.openById(DB_ID).getSheets();
+    const studentSheet = DB[0];
+    const logsSheet = DB[1];
+
+    // 1. Batch Insert Logs
+    const logRows = queue.map(log => [
+        new Date(log.timestamp),
+        log.studentId,
+        log.name,
+        log.action
+    ]);
+
+    // Batch insert using a 2D array mapping
+    if (logRows.length > 0) {
+        logsSheet.getRange(logsSheet.getLastRow() + 1, 1, logRows.length, 4).setValues(logRows);
+    }
+
+    // 2. Update Student Statuses
+    // Update non-contiguous rows independently in a loop, acceptable in background execution.
+    queue.forEach(log => {
+        studentSheet.getRange(log.sheetRow, 5, 1, 2).setValues([[log.action, new Date(log.timestamp)]]);
+    });
+}
+
+/**
+ * Utility to programmatically set up the time-driven trigger.
+ * Run this function ONCE from the Apps Script editor to activate the queue processing.
+ */
+function setupTrigger() {
+    // Prevent duplicate triggers by deleting old ones first
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(trigger => {
+        if (trigger.getHandlerFunction() === 'processScanQueue') {
+            ScriptApp.deleteTrigger(trigger);
+        }
+    });
+    
+    // Create new 1-minute trigger
+    ScriptApp.newTrigger('processScanQueue')
+        .timeBased()
+        .everyMinutes(1)
+        .create();
 }
