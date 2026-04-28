@@ -225,10 +225,27 @@ function processScanQueue() {
     }
 
     // 2. Update Student Statuses
-    // Update non-contiguous rows independently in a loop, acceptable in background execution.
-    queue.forEach(log => {
-        studentSheet.getRange(log.sheetRow, 5, 1, 2).setValues([[log.action, new Date(log.timestamp)]]);
-    });
+    // Batch update the entire column in memory to minimize Apps Script API calls
+    if (queue.length > 0) {
+        const studentLastRow = studentSheet.getLastRow();
+        if (studentLastRow > 0) {
+            // Fetch columns 5 (Current_status) and 6 (Last_scan_time) starting from row 1
+            const statusRange = studentSheet.getRange(1, 5, studentLastRow, 2);
+            const statusValues = statusRange.getValues();
+
+            // Update the array in memory
+            queue.forEach(log => {
+                const arrayIndex = log.sheetRow - 1; // 0-indexed array vs 1-indexed sheet
+                if (arrayIndex >= 0 && arrayIndex < statusValues.length) {
+                    statusValues[arrayIndex][0] = log.action;
+                    statusValues[arrayIndex][1] = new Date(log.timestamp);
+                }
+            });
+
+            // Write the entirely modified 2D array back in ONE API call
+            statusRange.setValues(statusValues);
+        }
+    }
 }
 
 /**
