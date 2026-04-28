@@ -48,32 +48,59 @@ function processScan(scannedData) {
         const studentSheet = DB[0];
         const logsSheet = DB[1];
 
-        // Fetch all data from the students sheet
-        const studentData = studentSheet.getDataRange().getValues();
+        // Access the globally scoped Script Cache
+        const cache = CacheService.getScriptCache();
+        const cacheKey = `state_${scannedData}`;
+        const cachedData = cache.get(cacheKey);
+
         let studentRowIndex = -1;
         let name = "Unknown";
         let currentStatus = "";
+        let last_scan_time = null;
 
-        // Find the student by ID (skip row 0 because it's the header)
-        for (let i = 1; i < studentData.length; i++) {
-            // Force string comparison for robust matching
-            if (String(studentData[i][0]) === String(scannedData)) {
-                studentRowIndex = i;
-                name = studentData[i][1];
-                currentStatus = studentData[i][4]; // Column E is index 4
-                break;
+        // If the student ID exists in the cache, pull the values from cache instead of querying DB
+        if (cachedData) {
+            const parsedData = JSON.parse(cachedData);
+            name = parsedData[0];
+            currentStatus = parsedData[1];
+            // Cache stores dates as strings/numbers, so instantiate a new Date object if it's not null
+            last_scan_time = parsedData[2] ? new Date(parsedData[2]) : null;
+            // We additionally store the sheet row index in cache so we know which row to update at the end
+            studentRowIndex = parsedData[3];
+        } else {
+            // Cache miss: Fetch all data from the students sheet
+            const studentData = studentSheet.getDataRange().getValues();
+            
+            // Find the student by ID (skip row 0 because it's the header)
+            for (let i = 1; i < studentData.length; i++) {
+                // Force string comparison for robust matching
+                if (String(studentData[i][0]) === String(scannedData)) {
+                    studentRowIndex = i;
+                    name = studentData[i][1];
+                    currentStatus = studentData[i][4]; // Column E is index 4
+                    last_scan_time = studentData[i][5];
+                    break;
+                }
+            }
+
+            // If the student doesn't exist, return an error
+            if (studentRowIndex === -1) {
+                return {
+                    success: false,
+                    message: "Student ID not found in database."
+                };
             }
         }
 
-        // If the student doesn't exist, return an error
-        if (studentRowIndex === -1) {
+        const current_timestamp = new Date();
+        const timeDiff = Math.floor((current_timestamp - last_scan_time) / 1000.0);
+
+        if (timeDiff < 5) {
             return {
                 success: false,
-                message: "Student ID not found in database."
+                message: "Too quick, wait some time before scanning again."
             };
         }
-
-        const timestamp = new Date();
         const studentId = scannedData;
 
         // Determine the action (opposite of current status)
@@ -87,10 +114,17 @@ function processScan(scannedData) {
         // Column E (Current_status) is col 5, Column F (Last_scan_time) is col 6. 
         //the below function call means from the cell {sheetRow, 5} update 1 row and 2 columns with the array provided 
         //i.e. update the range {sheetRow, 5} to {sheetRow, 6}
-        studentSheet.getRange(sheetRow, 5, 1, 2).setValues([[action, timestamp]]);
+        studentSheet.getRange(sheetRow, 5, 1, 2).setValues([[action, current_timestamp]]);
 
         // Append the array of data as a new row in the logs sheet
-        logsSheet.appendRow([timestamp, studentId, name, action]);
+        logsSheet.appendRow([current_timestamp, studentId, name, action]);
+
+        // "Read-through Cache": Update the cache so the next request gets the new status and timestamp instantly
+        cache.put(
+            cacheKey, 
+            JSON.stringify([name, action, current_timestamp.getTime(), studentRowIndex]), 
+            21600 // cache timeout in seconds (6 hours max for Apps Script cache)
+        );
 
         return {
             success: true,
