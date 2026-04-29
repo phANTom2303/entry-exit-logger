@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Entry/Exit Scanner</title>
+
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #f4f4f9;
+            padding-top: 20px;
+            margin: 0;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        #reader {
+            width: 100%;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #feedback {
+            margin-top: 15px;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            display: none;
+            word-wrap: break-word;
+        }
+
+        .auth-error {
+            color: #721c24;
+            background-color: #f8d7da;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 50px;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* UI Status Colors */
+        .status-in {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-out {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-processing {
+            background-color: #e2e3e5;
+            color: #383d41;
+            border: 1px solid #d6d8db;
+        }
+
+        .status-error {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app-container" class="card" style="display: none;">
+        <h2>QR Scanner</h2>
+        <div id="reader"></div>
+        <div id="feedback"></div>
+    </div>
+
+    <div id="auth-error-container" class="auth-error" style="display: none;">
+        <h3>Access Denied</h3>
+        <p>Invalid or missing security credentials. Please open the scanner through the official portal.</p>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURATION
+        // ==========================================
+        // TODO: Replace with your actual deployed Apps Script Web App URL ending in /exec
+        const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxPiJyCWaRpvmZ_pqGN-uLIVvNsljwCOZXVo2BtatKyQEch0Zhs9sGug3yTkmp6chvm/exec";
+
+        let html5QrcodeScanner;
+        let isProcessing = false; // Lock to prevent multiple simultaneous scans
+
+        // 1. Extract cryptographic parameters on load
+        const urlParams = new URLSearchParams(window.location.search);
+        const payloadString = urlParams.get('p');
+        const signatureString = urlParams.get('s');
+
+        // 2. Initial Guardrail Check
+        if (!payloadString || !signatureString) {
+            document.getElementById('auth-error-container').style.display = 'block';
+        } else {
+            document.getElementById('app-container').style.display = 'block';
+            initializeScanner();
+        }
+
+        function initializeScanner() {
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "reader",
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+          /* verbose= */ false
+            );
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        async function onScanSuccess(decodedText, decodedResult) {
+            // Prevent spam scanning if a request is already in flight
+            if (isProcessing) return;
+            isProcessing = true;
+
+            // Pause the scanner visually so the user knows it registered
+            html5QrcodeScanner.pause();
+            showFeedback(`Scanned ID: ${decodedText}. Processing...`, "status-processing");
+
+            const requestBody = {
+                route: 'scan',
+                p: payloadString,
+                s: signatureString,
+                scannedData: decodedText
+            };
+
+            try {
+                // Fetch API equivalent of google.script.run
+                const response = await fetch(GAS_WEBAPP_URL, {
+                    method: "POST",
+                    // CRITICAL: Must be text/plain to bypass CORS preflight issues in GAS
+                    headers: {
+                        "Content-Type": "text/plain;charset=utf-8",
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    const cssClass = result.status === "IN" ? "status-in" : "status-out";
+                    showFeedback(`${result.name} is ${result.status}`, cssClass);
+                } else {
+                    showFeedback(result.message, "status-error");
+                }
+
+            } catch (error) {
+                console.error("Network Error:", error);
+                showFeedback("Network error communicating with server.", "status-error");
+            } finally {
+                // Reset UI and resume scanning after 2.5 seconds
+                setTimeout(() => {
+                    document.getElementById('feedback').style.display = 'none';
+                    isProcessing = false;
+                    html5QrcodeScanner.resume();
+                }, 2500);
+            }
+        }
+
+        function onScanFailure(error) {
+            // html5-qrcode triggers this constantly as it tries to find a code in the frame.
+            // It is best to ignore it unless you are actively debugging camera frames.
+        }
+
+        // --- Helper Functions ---
+        function showFeedback(text, className) {
+            const fb = document.getElementById('feedback');
+            fb.style.display = 'block';
+            fb.innerText = text;
+            fb.className = className;
+        }
+    </script>
+</body>
+
+</html>
