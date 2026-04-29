@@ -4,6 +4,7 @@
 // Fetch the Spreadsheet ID and Folder ID from Apps Script's environment variables (Script Properties)
 const DB_ID = PropertiesService.getScriptProperties().getProperty('DB_ID');
 const QR_FOLDER_ID = PropertiesService.getScriptProperties().getProperty('QR_FOLDER_ID');
+const SECRET_KEY = PropertiesService.getScriptProperties().getProperty('SECRET_KEY');
 
 // ==========================================
 // ROUTING (The GET Endpoint)
@@ -23,10 +24,99 @@ function doGet(e) {
         } else if (route === 'add-student') {
             return serveHtml('AddStudent', 'Admin Dashboard - Add Student');
         }
-    }
+    } else {
+        const userEmail = Session.getActiveUser().getEmail();
 
-    // Default fallback: Serve the main Scanner Web App
-    return serveHtml('Scanner', 'Security Scanner');
+        // 1. Create the payload with an expiration time (e.g., 10 minutes)
+        const payload = {
+            email: userEmail,
+            exp: new Date().getTime() + (10 * 60 * 1000)
+        };
+
+        const payloadString = Utilities.base64Encode(JSON.stringify(payload));
+
+        // 2. Sign the payload
+        const signature = Utilities.computeHmacSha256Signature(payloadString, SECRET_KEY);
+        const signatureString = Utilities.base64Encode(signature);
+
+        // 3. Redirect to Vercel
+        const vercelUrl = `https://your-scanner-app.vercel.app/?p=${payloadString}&s=${signatureString}`;
+
+        return HtmlService.createHtmlOutput(`<script>window.top.location.href="${vercelUrl}";</script>`);
+    }
+}
+
+// ==========================================
+// POST ENDPOINTS (Webhooks from Vercel)
+// ==========================================
+function doPost(e) {
+    try {
+        // 1. Parse the incoming JSON body from Vercel
+        const requestData = JSON.parse(e.postData.contents);
+        const { route, p, s, scannedData } = requestData;
+
+        // 2. Route Controlling
+        if (route === 'scan') {
+
+            // --- SECURITY CLEARANCE ---
+            // A. Verify Signature
+            const expectedSignature = Utilities.base64Encode(Utilities.computeHmacSha256Signature(p, SECRET_KEY));
+            if (s !== expectedSignature) {
+                return buildJsonResponse({
+                    success: false,
+                    message: "Unauthorized: Invalid Signature. Request tampered with."
+                });
+            }
+
+            // B. Verify Expiration
+            // Apps Script base64Decode returns a byte array. We convert it to a string via Blob.
+            const decodedPayloadStr = Utilities.newBlob(Utilities.base64Decode(p)).getDataAsString();
+            const decodedPayload = JSON.parse(decodedPayloadStr);
+
+            if (new Date().getTime() > decodedPayload.exp) {
+                return buildJsonResponse({
+                    success: false,
+                    message: "Unauthorized: Session Expired. Please reload the scanner from the main portal."
+                });
+            }
+
+            // --- PROCESS THE SCAN ---
+            if (!scannedData) {
+                return buildJsonResponse({
+                    success: false,
+                    message: "Bad Request: No scannedData provided in the payload."
+                });
+            }
+
+            // Call your existing RPC function directly
+            const scanResult = processScan(scannedData);
+
+            // Return the result of processScan back to Vercel
+            return buildJsonResponse(scanResult);
+
+        } else {
+            // Handle unknown routes
+            return buildJsonResponse({
+                success: false,
+                message: `Route '${route}' not found or not supported via POST.`
+            });
+        }
+
+    } catch (error) {
+        console.error("doPost Error:", error);
+        return buildJsonResponse({
+            success: false,
+            message: "Internal Server Error: " + error.message
+        });
+    }
+}
+
+/**
+ * Helper function to consistently format JSON responses for external clients
+ */
+function buildJsonResponse(data) {
+    return ContentService.createTextOutput(JSON.stringify(data))
+        .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
