@@ -5,6 +5,7 @@
 const DB_ID = PropertiesService.getScriptProperties().getProperty('DB_ID');
 const QR_FOLDER_ID = PropertiesService.getScriptProperties().getProperty('QR_FOLDER_ID');
 const SECRET_KEY = PropertiesService.getScriptProperties().getProperty('SECRET_KEY');
+const SCANNER_URL = PropertiesService.getScriptProperties().getProperty('SCANNER_URL');
 
 // ==========================================
 // ROUTING (The GET Endpoint)
@@ -40,7 +41,7 @@ function doGet(e) {
         const signatureString = Utilities.base64Encode(signature);
 
         // 3. Redirect to Vercel
-        const vercelUrl = `https://your-scanner-app.vercel.app/?p=${payloadString}&s=${signatureString}`;
+        const vercelUrl = `${SCANNER_URL}/?p=${payloadString}&s=${signatureString}`;
 
         return HtmlService.createHtmlOutput(`<script>window.top.location.href="${vercelUrl}";</script>`);
     }
