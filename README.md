@@ -4,6 +4,14 @@ A robust, web-based application designed to reliably track and log student entri
 
 Submission by Anish Goenka, Email : anikavy.goenka@gmail.com
 
+Project Google Drive Folder : [Link](https://drive.google.com/drive/folders/1LFbX1zSobrtXRkAuGOZv7UMhxHjctfw1?usp=sharing)
+
+Apps Script Project Link : [Link](https://script.google.com/d/1ruDQGQ7rTjG8qlZ-AoFrfWAy7kE4NLl6B1gdSs5P5CeRZ4tioKfcnsBc/edit?usp=sharing)
+
+Project Github Repository : [Link](https://github.com/phANTom2303/entry-exit-logger)
+
+Scanner Frontend Repository : [Link](https://github.com/phANTom2303/entry-exit-logger-scanner)
+
 ## Features
 
 - **Quick Scanning Interface**: A responsive UI (`Scanner.html`) to process student IDs rapidly.
