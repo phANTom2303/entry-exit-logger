@@ -11,11 +11,18 @@ const QR_FOLDER_ID = PropertiesService.getScriptProperties().getProperty('QR_FOL
 function doGet(e) {
     // 1. Extract the route parameter from the URL (e.g., ?route=admin)
     // If the URL is just the base URL, route will be undefined.
+    const role = e.parameter ? e.parameter.role : 'scanner';
     const route = e.parameter ? e.parameter.route : null;
 
     // 2. Route the request to the correct HTML view
-    if (route === 'admin') {
-        return serveHtml('Admin', 'Admin Dashboard');
+    if (role === 'admin') {
+        if (route === 'logs') {
+            return serveHtml('Admin', 'Admin Dashboard - Logs');
+        } else if (route === 'students') {
+            return serveHtml('Students', 'Admin Dashboard - Students List');
+        } else if (route === 'add-student') {
+            return serveHtml('AddStudent', 'Admin Dashboard - Add Student');
+        }
     }
 
     // Default fallback: Serve the main Scanner Web App
@@ -32,6 +39,12 @@ function serveHtml(filename, title) {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
 }
 
+/**
+ * Get the Web App URL so the frontend can navigate to different routes
+ */
+function getAppUrl() {
+    return ScriptApp.getService().getUrl();
+}
 
 // ==========================================
 // RPC ENDPOINTS (Called by google.script.run)

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <title>Students List</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 20px;
+        color: #333;
+      }
+      button {
+        padding: 8px 16px;
+        cursor: pointer;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      button:hover:not(:disabled) {
+        background-color: #0056b3;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 10px;
+        border: 1px solid #ddd;
+        text-align: left;
+      }
+      th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+      }
+      tr:nth-child(even) {
+        background-color: #fdfdfd;
+      }
+      .message-cell {
+        font-style: italic;
+        color: #666;
+        text-align: center;
+      }
+      .error-cell {
+        color: #d9534f;
+        text-align: center;
+      }
+      .nav-tabs {
+        display: flex;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #ddd;
+      }
+      .nav-tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        background: #f8f9fa;
+        border: 1px solid transparent;
+        border-bottom: none;
+        font-weight: bold;
+      }
+      .nav-tab.active {
+        background: #fff;
+        border-color: #ddd;
+        border-radius: 4px 4px 0 0;
+        margin-bottom: -2px;
+        border-bottom: 2px solid #fff;
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Admin Dashboard</h1>
+
+    <div class="nav-tabs">
+      <div class="nav-tab" onclick="navigateTo('logs')">Logs</div>
+      <div class="nav-tab active">Students List</div>
+      <div class="nav-tab" onclick="navigateTo('add-student')">Add Student</div>
+    </div>
+
+    <!-- S T U D E N T S   T A B -->
+    <div id="students-tab" class="tab-content active">
+      <button onclick="fetchStudents()" style="margin-bottom: 15px;">Refresh Students</button>
+      <table id="students-table">
+        <thead>
+          <tr>
+            <th>Student ID</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>QR Drive Link</th>
+            <th>Current Status</th>
+            <th>Last Scan Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="6" class="message-cell">Loading students...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      let scriptUrl = '';
+
+      document.addEventListener("DOMContentLoaded", function() {
+        google.script.run.withSuccessHandler(url => {
+          scriptUrl = url;
+        }).getAppUrl();
+
+        fetchStudents();
+      });
+
+   function navigateTo(route) {
+        if (!scriptUrl) return; // wait for URL to load
+        window.top.location.href = scriptUrl + "?role=admin&route=" + route;
+      }
+      function fetchStudents() {
+        const tbody = document.querySelector("#students-table tbody");
+        tbody.innerHTML = '<tr><td colspan="6" class="message-cell">Loading students...</td></tr>';
+        
+        google.script.run
+          .withSuccessHandler(function(response) {
+            tbody.innerHTML = '';
+            if (response.success) {
+              if (response.data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="message-cell">No students found.</td></tr>';
+                return;
+              }
+              response.data.forEach(row => {
+                const tr = document.createElement("tr");
+                row.forEach((cellData, index) => {
+                  const td = document.createElement("td");
+                  if (index === 3 && cellData && typeof cellData === 'string' && cellData.startsWith('http')) {
+                    const a = document.createElement("a");
+                    a.href = cellData;
+                    a.target = "_blank";
+                    a.textContent = "View QR";
+                    td.appendChild(a);
+                  } else {
+                    td.textContent = cellData !== undefined ? cellData : "";
+                  }
+                  tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+              });
+            } else {
+              tbody.innerHTML = `<tr><td colspan="6" class="error-cell">Error: ${response.message}</td></tr>`;
+            }
+          })
+          .withFailureHandler(function(error) {
+            tbody.innerHTML = `<tr><td colspan="6" class="error-cell">Failed: ${error.message}</td></tr>`;
+          })
+          .getAllStudents();
+      }
+    </script>
+  </body>
+</html>

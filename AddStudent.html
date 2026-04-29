@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <title>Add Student</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 20px;
+        color: #333;
+      }
+      button {
+        padding: 8px 16px;
+        cursor: pointer;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      button:hover:not(:disabled) {
+        background-color: #0056b3;
+      }
+      .nav-tabs {
+        display: flex;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #ddd;
+      }
+      .nav-tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        background: #f8f9fa;
+        border: 1px solid transparent;
+        border-bottom: none;
+        font-weight: bold;
+      }
+      .nav-tab.active {
+        background: #fff;
+        border-color: #ddd;
+        border-radius: 4px 4px 0 0;
+        margin-bottom: -2px;
+        border-bottom: 2px solid #fff;
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+      .form-group {
+        margin-bottom: 15px;
+        max-width: 400px;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      .form-group input {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      #add-student-message {
+        margin-bottom: 10px;
+        font-weight: bold;
+      }
+      .msg-success { color: green; }
+      .msg-error { color: red; }
+    </style>
+  </head>
+  <body>
+    <h1>Admin Dashboard</h1>
+
+    <div class="nav-tabs">
+      <div class="nav-tab" onclick="navigateTo('logs')">Logs</div>
+      <div class="nav-tab" onclick="navigateTo('students')">Students List</div>
+      <div class="nav-tab active">Add Student</div>
+    </div>
+
+    <!-- A D D   S T U D E N T   T A B -->
+    <div id="add-student-tab" class="tab-content active">
+      <h3>Add New Student</h3>
+      <div id="add-student-message"></div>
+      <div class="form-group">
+        <label>Student ID</label>
+        <input type="text" id="new-student-id" required placeholder="e.g. 12345" />
+      </div>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="new-student-name" required placeholder="e.g. John Doe" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="new-student-email" required placeholder="e.g. john@example.com" />
+      </div>
+      <button onclick="submitNewStudent()" id="btn-submit-student">Create Student & Generate QR</button>
+    </div>
+    
+    <script>
+      let scriptUrl = '';
+
+      document.addEventListener("DOMContentLoaded", function() {
+        google.script.run.withSuccessHandler(url => {
+          scriptUrl = url;
+        }).getAppUrl();
+      });
+
+      function navigateTo(route) {
+        if (!scriptUrl) return; // wait for URL to load
+        window.top.location.href = scriptUrl + "?role=admin&route=" + route;
+      }
+
+      function submitNewStudent() {
+        const idInput = document.getElementById("new-student-id");
+        const nameInput = document.getElementById("new-student-name");
+        const emailInput = document.getElementById("new-student-email");
+        const msgDiv = document.getElementById("add-student-message");
+        const btn = document.getElementById("btn-submit-student");
+
+        const id = idInput.value.trim();
+        const name = nameInput.value.trim();
+        const email = emailInput.value.trim();
+
+        if (!id || !name || !email) {
+          msgDiv.textContent = "Please fill out all fields.";
+          msgDiv.className = "msg-error";
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = "Processing...";
+        msgDiv.textContent = "Creating student and uploading QR. Please wait...";
+        msgDiv.className = "";
+
+        google.script.run
+          .withSuccessHandler(function(response) {
+            btn.disabled = false;
+            btn.textContent = "Create Student & Generate QR";
+            if (response.success) {
+              msgDiv.textContent = response.message + " QR Link: " + response.driveLink;
+              msgDiv.className = "msg-success";
+              idInput.value = "";
+              nameInput.value = "";
+              emailInput.value = "";
+            } else {
+              msgDiv.textContent = "Error: " + response.message;
+              msgDiv.className = "msg-error";
+            }
+          })
+          .withFailureHandler(function(error) {
+            btn.disabled = false;
+            btn.textContent = "Create Student & Generate QR";
+            msgDiv.textContent = "Failed: " + error.message;
+            msgDiv.className = "msg-error";
+          })
+          .createStudent(id, name, email);
+      }
+    </script>
+  </body>
+</html>
