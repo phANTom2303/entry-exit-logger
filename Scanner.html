@@ -37,9 +37,6 @@
         border-radius: 4px;
         cursor: pointer;
       }
-      button:disabled {
-        background-color: #cccccc;
-      }
       #feedback {
         margin-top: 20px;
         padding: 15px;
@@ -51,104 +48,31 @@
       /* UI Status Colors */
       .status-in { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
       .status-out { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-      .status-processing { background-color: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
-      .status-error { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
     </style>
   </head>
   <body>
 
     <div class="card">
-      <h2>RPC Test Scanner</h2>
-      <p>Enter a mock ID to test the backend</p>
+      <h2>Campus Gate Scanner</h2>
+      <p>Use the external camera scanner below to record entry or exit.</p>
       
-      <input type="text" id="studentId" placeholder="e.g., mock-uuid-123" />
-      <br>
-      <button id="scanBtn" onclick="triggerScan()">Simulate Scan</button>
+      <a id="scannerLink" href="https://legendary-torte-d58083.netlify.app" target="_blank" class="btn" style="text-decoration: none; display: inline-block; padding: 10px 20px; font-size: 16px; background-color: #28a745; color: white; border-radius: 4px;">
+        📸 Open Scanner
+      </a>
       
       <div id="feedback"></div>
     </div>
 
     <script>
-      function triggerScan() {
-        const inputField = document.getElementById('studentId');
-        const studentId = inputField.value.trim();
-        const btn = document.getElementById('scanBtn');
-
-        // Basic validation
-        if (!studentId) {
-          showFeedback("Please enter an ID", "status-error");
-          return;
-        }
-
-        // Lock UI to prevent spam clicks while waiting for the server
-        btn.disabled = true;
-        inputField.disabled = true;
-        showFeedback("Processing...", "status-processing");
-
-        // 1. Create a timeout safeguard (e.g., 15 seconds)
-        const timeoutMs = 15000; 
-        let requestFinished = false;
-
-        const timeoutId = setTimeout(() => {
-            if (!requestFinished) {
-                requestFinished = true;
-                showFeedback("Request timed out. Please try again.", "status-error");
-                resetUI();
-            }
-        }, timeoutMs);
-
-        // ==========================================
-        // THE RPC CALL TO GOOGLE APPS SCRIPT
-        // ==========================================
-        google.script.run
-          .withSuccessHandler(function(response) {
-            if (requestFinished) return; // Ignore if timeout already triggered
-            requestFinished = true;
-            clearTimeout(timeoutId);
-            
-            // This runs if Code.gs returns data without throwing an error
-            if (response.success) {
-               const cssClass = response.status === "IN" ? "status-in" : "status-out";
-               showFeedback(`${response.name} is ${response.status}`, cssClass);
-            } else {
-               showFeedback(response.message, "status-error");
-            }
-            
-            resetUI();
-          })
-          .withFailureHandler(function(error) {
-            if (requestFinished) return; 
-            requestFinished = true;
-            clearTimeout(timeoutId);
-            
-            // This runs if Code.gs throws an Error or completely crashes
-            showFeedback("Server Error: " + error.message, "status-error");
-            resetUI();
-          })
-          .processScan(studentId); // Calls the function in Code.gs
-      }
-
-      // --- Helper Functions ---
-      function showFeedback(text, className) {
-        const fb = document.getElementById('feedback');
-        fb.style.display = 'block';
-        fb.innerText = text;
-        fb.className = className;
-      }
-
-      function resetUI() {
-        const inputField = document.getElementById('studentId');
-        const btn = document.getElementById('scanBtn');
-        
-        // Re-enable inputs and clear the text box after 2 seconds
-        setTimeout(() => {
-          inputField.value = '';
-          inputField.disabled = false;
-          btn.disabled = false;
-          inputField.focus();
-          document.getElementById('feedback').style.display = 'none';
-        }, 2000);
-      }
+      // Automatically fetch the Apps Script Web App URL and append it to our scanner link
+      window.onload = function() {
+        google.script.run.withSuccessHandler(function(url) {
+          const scannerLink = document.getElementById('scannerLink');
+          if (scannerLink && url) {
+            scannerLink.href = "https://legendary-torte-d58083.netlify.app?callback=" + encodeURIComponent(url);
+          }
+        }).getAppUrl();
+      };
     </script>
   </body>
 </html>

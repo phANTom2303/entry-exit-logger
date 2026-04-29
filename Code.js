@@ -393,3 +393,35 @@ function setupTrigger() {
         .everyMinutes(1)
         .create();
 }
+
+// ==========================================
+// WEBHOOK (POST Endpoint)
+// ==========================================
+
+function doPost(e) {
+  try {
+    // 1. Parse incoming JSON from the external scanner
+    const data = JSON.parse(e.postData.contents);
+    const scannedId = data.barcode;
+
+    if (!scannedId) {
+      return jsonResponse({ success: false, message: "Missing ID" });
+    }
+
+    // 2. Pass the ID to their EXISTING backend function
+    const result = processScan(scannedId);
+
+    // 3. Return the exact result back to the scanner
+    return jsonResponse(result);
+
+  } catch (error) {
+    return jsonResponse({ success: false, message: error.toString() });
+  }
+}
+
+// Helper block to format JSON correctly
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
