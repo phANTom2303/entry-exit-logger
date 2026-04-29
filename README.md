@@ -2,6 +2,8 @@
 
 A robust, web-based application designed to reliably track and log student entries and exits in real-time. Built on Google Apps Script and using Google Sheets as a database, the system features a dedicated scanning interface and admin dashboards for streamlined student management.
 
+Submission by Anish Goenka, Email : anikavy.goenka@gmail.com
+
 ## Features
 
 - **Quick Scanning Interface**: A responsive UI (`Scanner.html`) to process student IDs rapidly.
