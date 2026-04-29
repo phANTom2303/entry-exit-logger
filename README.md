@@ -2,7 +2,7 @@
 
 A robust, web-based application designed to reliably track and log student entries and exits in real-time. Built on Google Apps Script and using Google Sheets as a database, the system features a dedicated scanning interface and admin dashboards for streamlined student management.
 
-Submission by Anish Goenka, Email : anikavy.goenka@gmail.com | 2305031@kiit.ac.in
+Submission by Anish Goenka, Email : anikavy.goenka@gmail.com | 2305031@kiit.ac.in   
 
 Project Google Drive Folder : [Link](https://drive.google.com/drive/folders/1LFbX1zSobrtXRkAuGOZv7UMhxHjctfw1?usp=sharing)
 
