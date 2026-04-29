@@ -144,6 +144,13 @@ function processScan(scannedData) {
             });
 
             cache.put('scanQueue', JSON.stringify(scanQueue), 21600); // 6 hours
+
+            // "Read-through Cache": Update the cache so the next request gets the new status and timestamp instantly
+            cache.put(
+                cacheKey,
+                JSON.stringify([name, action, current_timestamp.getTime(), studentRowIndex]),
+                21600 // cache timeout in seconds (6 hours max for Apps Script cache)
+            );
         } catch (error) {
             console.error("Lock error, failed to write to queue:", error);
             return {
@@ -153,13 +160,6 @@ function processScan(scannedData) {
         } finally {
             lock.releaseLock();
         }
-
-        // "Read-through Cache": Update the cache so the next request gets the new status and timestamp instantly
-        cache.put(
-            cacheKey,
-            JSON.stringify([name, action, current_timestamp.getTime(), studentRowIndex]),
-            21600 // cache timeout in seconds (6 hours max for Apps Script cache)
-        );
 
         return {
             success: true,
